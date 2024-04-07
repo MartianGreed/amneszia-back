@@ -16,17 +16,6 @@ var (
 	board          *game.Board
 )
 
-func sendMessageToAllPool(msg string) error {
-	connectionPool.RLock()
-	defer connectionPool.RUnlock()
-	for connection := range connectionPool.Connections {
-		if err := websocket.Message.Send(connection, msg); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func hello(c echo.Context) error {
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
@@ -95,5 +84,5 @@ func main() {
 
 	e.GET("/ws", hello)
 
-	e.Logger.Fatal(e.Start(":8080"))
+	e.Logger.Fatal(e.Start(":8000"))
 }

@@ -4,8 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -61,12 +63,51 @@ func LoadCollection() *Collection {
 }
 
 func fetchBloblertTokenUri(rpc starknet.StarknetRpcClient, i int, uriCh chan string) {
+	// check if file i.json exists in filesystem
+	fName := fmt.Sprintf("data/%d.json", i)
+	if fileExists(fName) {
+		uriCh <- readFromFile(fName)
+		return
+	}
+
 	uri, err := starknet.GetTokenUri(rpc, "0x00539f522b29ae9251dbf7443c7a950cf260372e69efab3710a11bf17a9599f1", i)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to fetch blobert id : %d", i), "error", err)
 	}
 
+	go writeToFile(fName, uri)
+
 	uriCh <- uri
+}
+
+func fileExists(fName string) bool {
+	_, err := os.Stat(fName)
+	return !os.IsNotExist(err)
+}
+
+func readFromFile(fName string) string {
+	f, err := os.Open(fName)
+	if err != nil {
+		slog.Error("failed to open file", "error", err)
+	}
+	defer f.Close()
+	b, err := io.ReadAll(f)
+	if err != nil {
+		slog.Error("failed to read file", "error", err)
+	}
+	return string(b)
+}
+
+func writeToFile(fName, data string) {
+	f, err := os.Create(fName)
+	if err != nil {
+		slog.Error("failed to create file", "error", err)
+	}
+	defer f.Close()
+	_, err = f.WriteString(data)
+	if err != nil {
+		slog.Error("failed to write to file", "error", err)
+	}
 }
 
 func appendToCollection(c *Collection, i int, uri string) {
