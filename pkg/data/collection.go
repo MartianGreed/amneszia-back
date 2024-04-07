@@ -45,6 +45,7 @@ type Attributes struct {
 	Description string              `json:"description"`
 	Image       string              `json:"image"`
 	Attributes  []map[string]string `json:"attributes"`
+	TokenId     int                 `json:"token_id"`
 }
 
 func LoadCollection() *Collection {
@@ -55,7 +56,7 @@ func LoadCollection() *Collection {
 	for i := 1; i <= MaxTokenId; i++ {
 		go fetchBloblertTokenUri(rpc, i, uriCh)
 		uri := <-uriCh
-		go appendToCollection(collection, i, uri)
+		appendToCollection(collection, i, uri)
 	}
 
 	slog.Info("collection loaded")
@@ -114,6 +115,7 @@ func appendToCollection(c *Collection, i int, uri string) {
 	uri = strings.Replace(uri, "data:application/json;base64,", "", 1)
 	uri = decodeBase64(uri)
 	attr := parseAttributesFromJsonStr(uri)
+	attr.TokenId = i
 
 	c.inner[i] = attr
 }

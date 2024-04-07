@@ -76,15 +76,16 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 		c := cp.Connections[ws]
 		sendSystemRevealCard(board, cp, ua)
 		if c.timer == nil {
-			go startTimer(board, cp, ws, ua)
+			startTimer(board, cp, ws, ua)
 		} else {
-			go resetTimer(board, cp, ws, ua)
+			resetTimer(board, cp, ws, ua)
 
 			// check if tiles match
-			prev := board.grid[c.x][c.y]
+			prev := board.grid[cp.Connections[ws].x][cp.Connections[ws].y]
 			curr := board.grid[ua.X][ua.Y]
+
 			if prev.Name == curr.Name {
-				go stopTimer(cp, ws)
+				stopTimer(cp, ws)
 
 				// do not hide the cards
 				board.Revealed[c.x][c.y].Revealed = true
@@ -93,9 +94,9 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 				board.Revealed[ua.X][ua.Y].Attr = &curr
 				// execute match_tiles onchain
 
+				cp.Connections[ws] = &ConnectionBuf{}
 			}
 		}
-		cp.Connections[ws] = &ConnectionBuf{timer: nil}
 	default: // unknown event
 		return nil
 	}
