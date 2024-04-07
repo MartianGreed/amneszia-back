@@ -24,10 +24,12 @@ func CreateBoard(collection *data.Collection) *Board {
 	// create 6x10 grid
 	// place randomly 30 pairs of cards
 	var grid [][]data.Attributes
+	count := 0
 	for i := 0; i < 6; i++ {
 		var row []data.Attributes
 		for j := 0; j < 10; j++ {
-			row = append(row, pairs[i+1*j+1])
+			row = append(row, pairs[count])
+			count++
 		}
 		grid = append(grid, row)
 	}

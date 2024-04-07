@@ -103,33 +103,32 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 	return nil
 }
 
-func sendSystemHoverCard(cp *ConnectionPool, action SystemHoverCardMessage) {
-	rcm := SystemHoverCardMessage{
-		Event: action.Event,
-		X:     action.X,
-		Y:     action.Y,
-	}
+func sendToConnectionPool(cp *ConnectionPool, t string, msg interface{}) {
 	for connection := range cp.Connections {
-		err := websocket.JSON.Send(connection, rcm)
+		err := websocket.JSON.Send(connection, msg)
 		if err != nil {
-			slog.Error(fmt.Sprintf("failed to send system.hover-card to %s", connection.Request().Header.Get("Sec-Websocket-Key")))
+			slog.Error(fmt.Sprintf("failed to send %s to %s", t, connection.Request().Header.Get("Sec-Websocket-Key")))
 		}
 	}
 }
 
-func sendSystemRevealCard(board *Board, cp *ConnectionPool, action UserAction) {
+func sendSystemHoverCard(cp *ConnectionPool, a SystemHoverCardMessage) {
+	rcm := SystemHoverCardMessage{
+		Event: a.Event,
+		X:     a.X,
+		Y:     a.Y,
+	}
+	sendToConnectionPool(cp, "system.hover-card", rcm)
+}
+
+func sendSystemRevealCard(board *Board, cp *ConnectionPool, ua UserAction) {
 	rcm := SystemRevealCardMessage{
 		Event:     "system.reveal-card",
-		Attribute: Tile{Attr: &board.grid[action.X][action.Y], Revealed: true},
-		X:         action.X,
-		Y:         action.Y,
+		Attribute: Tile{Attr: &board.grid[ua.X][ua.Y], Revealed: true},
+		X:         ua.X,
+		Y:         ua.Y,
 	}
-	for connection := range cp.Connections {
-		err := websocket.JSON.Send(connection, rcm)
-		if err != nil {
-			slog.Error(fmt.Sprintf("failed to send system.reveal-card to %s", connection.Request().Header.Get("Sec-Websocket-Key")))
-		}
-	}
+	sendToConnectionPool(cp, "system.reveal-card", rcm)
 }
 
 func sendSystemHideCard(b *Board, cp *ConnectionPool, action SystemHideCardMessage) {
@@ -144,12 +143,7 @@ func sendSystemHideCard(b *Board, cp *ConnectionPool, action SystemHideCardMessa
 		X:         action.X,
 		Y:         action.Y,
 	}
-	for connection := range cp.Connections {
-		err := websocket.JSON.Send(connection, rcm)
-		if err != nil {
-			slog.Error(fmt.Sprintf("failed to send system.hover-card to %s", connection.Request().Header.Get("Sec-Websocket-Key")))
-		}
-	}
+	sendToConnectionPool(cp, "system.hide-card", rcm)
 }
 
 func startTimer(b *Board, cp *ConnectionPool, ws *websocket.Conn, action UserAction) {
