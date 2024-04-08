@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,12 +13,24 @@ import (
 var RevealTimeout = 2 * time.Second
 
 type ConnectionBuf struct {
-	timer *time.Timer
-	x     int
-	y     int
-	x2    int
-	y2    int
+	timer       *time.Timer
+	actions     []UserAction
+	actionCount int
+	x           int
+	y           int
+	x2          int
+	y2          int
 }
+
+func (c *ConnectionBuf) appendAction(ua UserAction) {
+	c.actionCount++
+	c.actions = append(c.actions, ua)
+}
+
+func (c *ConnectionBuf) resetActions() {
+	c.actions = []UserAction{}
+}
+
 type ConnectionPool struct {
 	Connections map[*websocket.Conn]*ConnectionBuf
 	sync.RWMutex
@@ -73,28 +86,26 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 	case "user.leave-card":
 		sendSystemHoverCard(cp, SystemHoverCardMessage{Event: "system.leave-card", X: ua.X, Y: ua.Y})
 	case "user.reveal-card":
-		c := cp.Connections[ws]
-		sendSystemRevealCard(board, cp, ua)
-		if c.timer == nil {
-			startTimer(board, cp, ws, ua)
-		} else {
-			resetTimer(board, cp, ws, ua)
+		incrementUserActionCounter(cp, ws, ua)
+		_ = cp.Connections[ws]
+		go sendSystemRevealCard(board, cp, ua)
+		go hideCardAfterTimeout(board, cp, ws, ua)
 
-			// check if tiles match
-			prev := board.grid[cp.Connections[ws].x][cp.Connections[ws].y]
+		if len(cp.Connections[ws].actions) > 1 {
+			prevActionIdx := len(cp.Connections[ws].actions) - 2
+			prev := board.grid[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y]
 			curr := board.grid[ua.X][ua.Y]
 
 			if prev.Name == curr.Name {
-				stopTimer(cp, ws)
 
 				// do not hide the cards
-				board.Revealed[c.x][c.y].Revealed = true
-				board.Revealed[c.x][c.y].Attr = &prev
+				board.Revealed[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y].Revealed = true
+				board.Revealed[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y].Attr = &board.grid[ua.X][ua.Y]
 				board.Revealed[ua.X][ua.Y].Revealed = true
-				board.Revealed[ua.X][ua.Y].Attr = &curr
+				board.Revealed[ua.X][ua.Y].Attr = &board.grid[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y]
 				// execute match_tiles onchain
 
-				cp.Connections[ws] = &ConnectionBuf{}
+				cp.Connections[ws].resetActions()
 			}
 		}
 	default: // unknown event
@@ -104,11 +115,23 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 	return nil
 }
 
+func incrementUserActionCounter(cp *ConnectionPool, ws *websocket.Conn, ua UserAction) {
+	if _, ok := cp.Connections[ws]; ok {
+		cp.Connections[ws].appendAction(ua)
+	}
+}
+
 func sendToConnectionPool(cp *ConnectionPool, t string, msg interface{}) {
 	for connection := range cp.Connections {
 		err := websocket.JSON.Send(connection, msg)
 		if err != nil {
 			slog.Error(fmt.Sprintf("failed to send %s to %s", t, connection.Request().Header.Get("Sec-Websocket-Key")))
+			// FIX: very odd but does not seem to have a case to handle those cases
+			if strings.Contains(err.Error(), "write: broken pipe") {
+				cp.Lock()
+				delete(cp.Connections, connection)
+				cp.Unlock()
+			}
 		}
 	}
 }
@@ -133,8 +156,7 @@ func sendSystemRevealCard(board *Board, cp *ConnectionPool, ua UserAction) {
 }
 
 func sendSystemHideCard(b *Board, cp *ConnectionPool, action SystemHideCardMessage) {
-	t := b.Revealed[action.X][action.Y]
-	if t.Revealed {
+	if b.Revealed[action.X][action.Y].Revealed {
 		return
 	}
 
@@ -187,4 +209,9 @@ func resetTimer(b *Board, cp *ConnectionPool, ws *websocket.Conn, ua UserAction)
 		cp.Connections[ws] = &ConnectionBuf{timer: nil}
 	})
 	cp.Connections[ws] = &ConnectionBuf{timer: t, x2: ua.X, y2: ua.Y}
+}
+
+func hideCardAfterTimeout(b *Board, cp *ConnectionPool, ws *websocket.Conn, ua UserAction) {
+	<-time.After(RevealTimeout)
+	sendSystemHideCard(b, cp, SystemHideCardMessage{Event: "system.hide-card", X: ua.X, Y: ua.Y})
 }
