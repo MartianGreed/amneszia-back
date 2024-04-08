@@ -20,8 +20,8 @@ type Board struct {
 	secrets   []FeltPair
 	pubkeys   []*felt.Felt
 	Revealed [][]Tile            `json:"revealed"`
-	g1 felt.Felt
-	g2 felt.Felt
+	priv_g1 felt.Felt
+	priv_g2 felt.Felt
 }
 
 type FeltPair struct {
@@ -36,8 +36,8 @@ type DistinguishedPair struct {
 
 func CreateBoard(collection *data.Collection) *Board {
 	server_seed := starknet.FeltFromInt(rand.Intn(9999999))
-	g1 := starknet.FeltFromInt(rand.Intn(9999999) + 1)
-	g2 := starknet.FeltFromInt(rand.Intn(9999999) + 1)
+	priv_g1 := starknet.FeltFromInt(rand.Intn(9999999) + 1)
+	priv_g2 := starknet.FeltFromInt(rand.Intn(9999999) + 1)
 
 	pairs := collection.GetPairs()
 	var originals []DistinguishedPair
@@ -73,7 +73,7 @@ func CreateBoard(collection *data.Collection) *Board {
 
 	row := make([]Tile, 10)
 
-	pubkeys := GenPublicKeys(secrets, *g1, *g2)
+	pubkeys := GenPublicKeys(secrets, *priv_g1, *priv_g2)
 
 	return &Board{
 		grid: grid,
@@ -87,8 +87,8 @@ func CreateBoard(collection *data.Collection) *Board {
 		},
 		secrets: secrets,
 		pubkeys: pubkeys,
-		g1: *g1,
-		g2: *g2,
+		priv_g1: *priv_g1,
+		priv_g2: *priv_g2,
 	}
 }
 
