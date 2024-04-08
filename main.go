@@ -9,6 +9,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/net/websocket"
+
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 var (
@@ -85,4 +89,19 @@ func main() {
 	e.GET("/ws", hello)
 
 	e.Logger.Fatal(e.Start(":8000"))
+
+	go gracefulShutdown()
+	forever := make(chan int)
+	<-forever
+}
+
+func gracefulShutdown() {
+    s := make(chan os.Signal, 1)
+    signal.Notify(s, os.Interrupt)
+    signal.Notify(s, syscall.SIGTERM)
+    go func() {
+        <-s
+        // clean up here
+        os.Exit(0)
+    }()
 }
