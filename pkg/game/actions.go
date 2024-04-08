@@ -10,7 +10,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-var RevealTimeout = 2 * time.Second
+// Do not keep blobs for too long
+var RevealTimeout = 1800 * time.Millisecond
 
 type ConnectionBuf struct {
 	timer       *time.Timer
