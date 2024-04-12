@@ -97,8 +97,7 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 			prev := board.grid[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y]
 			curr := board.grid[ua.X][ua.Y]
 
-			if prev.Name == curr.Name {
-
+			if prev.Name == curr.Name && cp.Connections[ws].actions[prevActionIdx].X != ua.X && cp.Connections[ws].actions[prevActionIdx].Y != ua.Y {
 				// do not hide the cards
 				board.Revealed[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y].Revealed = true
 				board.Revealed[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y].Attr = &board.grid[ua.X][ua.Y]
