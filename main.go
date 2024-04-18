@@ -3,16 +3,15 @@ package main
 import (
 	"encoding/json"
 	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/MartianGreed/memo-backend/pkg/data"
 	"github.com/MartianGreed/memo-backend/pkg/game"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/net/websocket"
-
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 var (
@@ -25,10 +24,15 @@ func hello(c echo.Context) error {
 		defer ws.Close()
 
 		uuid := ws.Request().Header.Get("Sec-Websocket-Key")
+		var userHello game.UserHello
+		err := websocket.JSON.Receive(ws, &userHello)
+		if err != nil && err.Error() != "EOF" {
+			c.Logger().Error(err)
+		}
 
 		connectionPool.Lock()
 		// execute join(contract_address: string, name: uuid) onchain to register user with wallet address
-		connectionPool.Connections[ws] = &game.ConnectionBuf{}
+		connectionPool.Connections[ws] = &game.ConnectionBuf{Name: userHello.Name}
 
 		defer func(connection *websocket.Conn) {
 			connectionPool.Lock()
@@ -96,12 +100,12 @@ func main() {
 }
 
 func gracefulShutdown() {
-    s := make(chan os.Signal, 1)
-    signal.Notify(s, os.Interrupt)
-    signal.Notify(s, syscall.SIGTERM)
-    go func() {
-        <-s
-        // clean up here
-        os.Exit(0)
-    }()
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, os.Interrupt)
+	signal.Notify(s, syscall.SIGTERM)
+	go func() {
+		<-s
+		// clean up here
+		os.Exit(0)
+	}()
 }

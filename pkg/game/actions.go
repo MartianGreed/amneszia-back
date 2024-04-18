@@ -15,6 +15,7 @@ var RevealTimeout = 1800 * time.Millisecond
 
 type ConnectionBuf struct {
 	timer       *time.Timer
+	Name        string
 	actions     []UserAction
 	actionCount int
 	x           int
@@ -49,6 +50,10 @@ type (
 		X     int
 		Y     int
 	}
+	UserHello struct {
+		Event string `json:"event"`
+		Name  string `json:"name"`
+	}
 	UserRevealCardAction struct {
 		Type string
 		X    int
@@ -56,6 +61,7 @@ type (
 	}
 	SystemHoverCardMessage struct {
 		Event string
+		Name  string
 		X     int
 		Y     int
 	}
@@ -83,9 +89,9 @@ type (
 func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *ConnectionPool) error {
 	switch ua.Event {
 	case "user.hover-card":
-		sendSystemHoverCard(cp, SystemHoverCardMessage{Event: "system.hover-card", X: ua.X, Y: ua.Y})
+		sendSystemHoverCard(cp, SystemHoverCardMessage{Event: "system.hover-card", X: ua.X, Y: ua.Y, Name: cp.Connections[ws].Name})
 	case "user.leave-card":
-		sendSystemHoverCard(cp, SystemHoverCardMessage{Event: "system.leave-card", X: ua.X, Y: ua.Y})
+		sendSystemHoverCard(cp, SystemHoverCardMessage{Event: "system.leave-card", X: ua.X, Y: ua.Y, Name: cp.Connections[ws].Name})
 	case "user.reveal-card":
 		incrementUserActionCounter(cp, ws, ua)
 		_ = cp.Connections[ws]
@@ -97,7 +103,8 @@ func HandleMessage(ua UserAction, board *Board, ws *websocket.Conn, cp *Connecti
 			prev := board.grid[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y]
 			curr := board.grid[ua.X][ua.Y]
 
-			if prev.Name == curr.Name && cp.Connections[ws].actions[prevActionIdx].X != ua.X && cp.Connections[ws].actions[prevActionIdx].Y != ua.Y {
+			// if prev.Name == curr.Name && cp.Connections[ws].actions[prevActionIdx].X != ua.X && cp.Connections[ws].actions[prevActionIdx].Y != ua.Y {
+			if prev.Name == curr.Name {
 				// do not hide the cards
 				board.Revealed[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y].Revealed = true
 				board.Revealed[cp.Connections[ws].actions[prevActionIdx].X][cp.Connections[ws].actions[prevActionIdx].Y].Attr = &board.grid[ua.X][ua.Y]
@@ -141,6 +148,7 @@ func sendSystemHoverCard(cp *ConnectionPool, a SystemHoverCardMessage) {
 		Event: a.Event,
 		X:     a.X,
 		Y:     a.Y,
+		Name:  a.Name,
 	}
 	sendToConnectionPool(cp, "system.hover-card", rcm)
 }
@@ -176,10 +184,10 @@ func startTimer(b *Board, cp *ConnectionPool, ws *websocket.Conn, action UserAct
 	t := time.AfterFunc(RevealTimeout, func() {
 		cp.Lock()
 		defer cp.Unlock()
-		cp.Connections[ws] = &ConnectionBuf{}
+		cp.Connections[ws] = &ConnectionBuf{Name: cp.Connections[ws].Name}
 		sendSystemHideCard(b, cp, SystemHideCardMessage{Event: "system.hide-card", X: action.X, Y: action.Y})
 	})
-	cp.Connections[ws] = &ConnectionBuf{timer: t, x: action.X, y: action.Y}
+	cp.Connections[ws] = &ConnectionBuf{timer: t, x: action.X, y: action.Y, Name: cp.Connections[ws].Name}
 }
 
 func stopTimer(cp *ConnectionPool, ws *websocket.Conn) {
@@ -189,7 +197,7 @@ func stopTimer(cp *ConnectionPool, ws *websocket.Conn) {
 		if c.timer != nil {
 			c.timer.Stop()
 		}
-		cp.Connections[ws] = &ConnectionBuf{timer: nil}
+		cp.Connections[ws] = &ConnectionBuf{timer: nil, Name: c.Name}
 	}
 }
 
@@ -206,9 +214,9 @@ func resetTimer(b *Board, cp *ConnectionPool, ws *websocket.Conn, ua UserAction)
 
 		sendSystemHideCard(b, cp, SystemHideCardMessage{Event: "system.hide-card", X: cp.Connections[ws].x, Y: cp.Connections[ws].y})
 		sendSystemHideCard(b, cp, SystemHideCardMessage{Event: "system.hide-card", X: ua.X, Y: ua.Y})
-		cp.Connections[ws] = &ConnectionBuf{timer: nil}
+		cp.Connections[ws] = &ConnectionBuf{timer: nil, Name: c.Name}
 	})
-	cp.Connections[ws] = &ConnectionBuf{timer: t, x2: ua.X, y2: ua.Y}
+	cp.Connections[ws] = &ConnectionBuf{timer: t, x2: ua.X, y2: ua.Y, Name: c.Name}
 }
 
 func hideCardAfterTimeout(b *Board, cp *ConnectionPool, ws *websocket.Conn, ua UserAction) {
